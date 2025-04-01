@@ -1,0 +1,318 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+    .dashboard-container {
+        padding: 20px;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .stat-box {
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .stat-number {
+        font-size: 24px;
+        font-weight: bold;
+        margin: 10px 0;
+        color: #2ecc71;
+    }
+    .completion-rate {
+        color: #3498db;
+    }
+    .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    .chart-container {
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .categories-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+        margin-top: 30px;
+    }
+    .category-box {
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .category-stats {
+        display: flex;
+        justify-content: space-around;
+        margin-top: 10px;
+    }
+    .category-stat {
+        text-align: center;
+    }
+    .progress-bar {
+        width: 100%;
+        height: 8px;
+        background-color: #eee;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+    .progress-bar-fill {
+        height: 100%;
+        background-color: #2ecc71;
+        border-radius: 4px;
+        transition: width 0.3s ease;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h1>{{ title }}</h1>
+    
+    <div class="stats-container">
+        <div class="stat-box">
+            <h3>總任務數</h3>
+            <div class="stat-number">{{ total_todos }}</div>
+        </div>
+        <div class="stat-box">
+            <h3>已完成</h3>
+            <div class="stat-number">{{ completed_todos }}</div>
+        </div>
+        <div class="stat-box">
+            <h3>待完成</h3>
+            <div class="stat-number">{{ pending_todos }}</div>
+        </div>
+        <div class="stat-box">
+            <h3>完成率</h3>
+            <div class="stat-number completion-rate">{{ completion_rate }}%</div>
+        </div>
+    </div>
+
+    <div class="chart-grid">
+        <div class="chart-container">
+            <h2>最近7天任務趨勢</h2>
+            <canvas id="dailyTrendChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h2>今日任務分佈</h2>
+            <canvas id="hourlyChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h2>分類統計</h2>
+            <canvas id="categoryChart"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h2>完成情況分析</h2>
+            <canvas id="completionChart"></canvas>
+        </div>
+    </div>
+
+    <div class="categories-container">
+        {% for stat in categories_stats %}
+        <div class="category-box">
+            <h3>{{ stat.name }}</h3>
+            <div class="category-stats">
+                <div class="category-stat">
+                    <div>總計</div>
+                    <div class="stat-number">{{ stat.total_todos }}</div>
+                </div>
+                <div class="category-stat">
+                    <div>已完成</div>
+                    <div class="stat-number">{{ stat.completed_todos }}</div>
+                </div>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-bar-fill" style="width: {% widthratio stat.completed_todos stat.total_todos 100 %}%"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+{{ block.super }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 每日趨勢圖表
+    const dailyCtx = document.getElementById('dailyTrendChart').getContext('2d');
+    new Chart(dailyCtx, {
+        type: 'line',
+        data: {
+            labels: {{ daily_labels|safe }},
+            datasets: [
+                {
+                    label: '總任務數',
+                    data: {{ daily_total|safe }},
+                    borderColor: '#2ecc71',
+                    backgroundColor: 'rgba(46, 204, 113, 0.1)',
+                    borderWidth: 2,
+                    fill: true
+                },
+                {
+                    label: '已完成',
+                    data: {{ daily_completed|safe }},
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 2,
+                    fill: true
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: '每日任務趨勢'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // 每小時任務分佈
+    const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
+    new Chart(hourlyCtx, {
+        type: 'bar',
+        data: {
+            labels: {{ hourly_labels|safe }},
+            datasets: [{
+                label: '任務數',
+                data: {{ hourly_data|safe }},
+                backgroundColor: 'rgba(52, 152, 219, 0.5)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: '每小時任務創建數量'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // 分類統計圖表
+    const categoryCtx = document.getElementById('categoryChart').getContext('2d');
+    const categoryStats = {{ categories_stats|safe }};
+    new Chart(categoryCtx, {
+        type: 'bar',
+        data: {
+            labels: categoryStats.map(stat => stat.name),
+            datasets: [
+                {
+                    label: '總任務數',
+                    data: categoryStats.map(stat => stat.total_todos),
+                    backgroundColor: 'rgba(52, 152, 219, 0.5)',
+                    borderColor: 'rgba(52, 152, 219, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: '已完成',
+                    data: categoryStats.map(stat => stat.completed_todos),
+                    backgroundColor: 'rgba(46, 204, 113, 0.5)',
+                    borderColor: 'rgba(46, 204, 113, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: '分類任務統計'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1
+                    }
+                }
+            }
+        }
+    });
+
+    // 完成情況圖表
+    const completionCtx = document.getElementById('completionChart').getContext('2d');
+    new Chart(completionCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['已完成', '待完成'],
+            datasets: [{
+                data: [{{ completed_todos }}, {{ pending_todos }}],
+                backgroundColor: [
+                    'rgba(46, 204, 113, 0.5)',
+                    'rgba(231, 76, 60, 0.5)'
+                ],
+                borderColor: [
+                    'rgba(46, 204, 113, 1)',
+                    'rgba(231, 76, 60, 1)'
+                ],
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: true,
+                    text: '任務完成情況'
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %} 
